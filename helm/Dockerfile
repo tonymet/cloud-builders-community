@@ -1,6 +1,7 @@
 FROM gcr.io/cloud-builders/gcloud
 
-ARG HELM_VERSION=v2.12.1
+ARG HELM_VERSION=v3.2.0
+ENV HELM_VERSION=$HELM_VERSION
 
 COPY helm.bash /builder/helm.bash
 
@@ -8,8 +9,8 @@ RUN chmod +x /builder/helm.bash && \
   mkdir -p /builder/helm && \
   apt-get update && \
   apt-get install -y curl && \
-  curl -SL https://storage.googleapis.com/kubernetes-helm/helm-${HELM_VERSION}-linux-amd64.tar.gz -o helm.tar.gz && \
-  tar zxvf helm.tar.gz --strip-components=1 -C /builder/helm linux-amd64/helm linux-amd64/tiller && \
+  curl -SL https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz -o helm.tar.gz && \
+  tar zxvf helm.tar.gz --strip-components=1 -C /builder/helm linux-amd64 && \
   rm helm.tar.gz && \
   apt-get --purge -y autoremove && \
   apt-get clean && \

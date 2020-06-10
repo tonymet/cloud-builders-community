@@ -8,8 +8,9 @@ steps:
         '--build-arg', 'CFT_VERSION=${_CFT_VERSION}',
         '.']
 substitutions:
-  _CFT_VERSION: 0.0.2
+  _CFT_VERSION: 0.0.4
 
 images:
 - 'gcr.io/$PROJECT_ID/cft:latest'
 - 'gcr.io/$PROJECT_ID/cft:$_CFT_VERSION'
+tags: ['cloud-builders-community']

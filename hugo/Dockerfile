@@ -1,7 +1,7 @@
 FROM busybox
-ENV HUGO_VERSION=0.49
-RUN wget -O- https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_${HUGO_VERSION}_Linux-64bit.tar.gz | tar zx
+ENV HUGO_VERSION=0.70.0
+RUN wget -O- https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_Linux-64bit.tar.gz | tar zx
 
-FROM gcr.io/distroless/base
+FROM gcr.io/distroless/cc
 ENTRYPOINT ["/hugo"]
 COPY --from=0 /hugo /

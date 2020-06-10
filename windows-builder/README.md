@@ -29,6 +29,15 @@ steps:
   args: [ '--command', '<command goes here>' ]
 ```
 
+To use a custom Windows image, specify the image URL using the `--image` argument.
+
+```yaml
+steps:
+- name: 'gcr.io/$PROJECT_ID/windows-builder'
+  args: [ '--command', '<command goes here>'
+          '--image', 'projects/$PROJECT_ID/global/images/my-windows-image']
+```
+
 The VM is configured by the builder and then deleted automatically at the end of the build.  Command is executed by `cmd.exe`; in most cases it will be a build script.
 
 To use an existing Windows server instead, also provide the hostname, username and password:
@@ -39,6 +48,31 @@ steps:
   args: [ '--hostname', 'host.domain.net',
           '--username', 'myuser',
           '--password', 's3cret',
+          '--command', '<command goes here>' ]
+```
+
+You can also provide the VPC, Subnetwork, Region, and Zone parameters to specify where to create the VM:
+
+```yaml
+steps:
+- name: 'gcr.io/$PROJECT_ID/windows-builder'
+  args: [ '--network', '<network-name>',
+          '--subnetwork', '<subnetwork-name>',
+          '--region', '<region>',
+          '--zone', '<zone>',
+          '--command', '<command goes here>' ]
+```
+
+As the remote copy command provided is very slow if you have a number of files in your workspace, it is also possible to avoid copying the workspace (you can use GCS to copy the workspace instead):
+
+```yaml
+steps:
+- name: 'gcr.io/$PROJECT_ID/windows-builder'
+  args: [ '--network', '<network-name>',
+          '--subnetwork', '<subnetwork-name>',
+          '--region', '<region>',
+          '--zone', '<zone>',
+          '--not-copy-workspace',
           '--command', '<command goes here>' ]
 ```
 

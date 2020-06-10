@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # If there is no current context, get one.
-if [[ $(kubectl config current-context 2> /dev/null) == "" ]]; then
+if [[ $(kubectl config current-context 2> /dev/null) == "" && "$SKIP_CLUSTER_CONFIG" != true ]]; then
     # This tries to read environment variables. If not set, it grabs from gcloud
     cluster=${CLOUDSDK_CONTAINER_CLUSTER:-$(gcloud config get-value container/cluster 2> /dev/null)}
     region=${CLOUDSDK_COMPUTE_REGION:-$(gcloud config get-value compute/region 2> /dev/null)}
@@ -22,18 +22,21 @@ EOF
     [ ! "$zone" -o "$region" ] && var_usage
 
     if [ -n "$region" ]; then
-      echo "Running: gcloud config set container/use_v1_api_client false"
-      gcloud config set container/use_v1_api_client false
-      echo "Running: gcloud beta container clusters get-credentials --project=\"$project\" --region=\"$region\" \"$cluster\""
-      gcloud beta container clusters get-credentials --project="$project" --region="$region" "$cluster" || exit
+      echo "Running: gcloud container clusters get-credentials --project=\"$project\" --region=\"$region\" \"$cluster\""
+      gcloud container clusters get-credentials --project="$project" --region="$region" "$cluster"
     else
       echo "Running: gcloud container clusters get-credentials --project=\"$project\" --zone=\"$zone\" \"$cluster\""
-      gcloud container clusters get-credentials --project="$project" --zone="$zone" "$cluster" || exit
+      gcloud container clusters get-credentials --project="$project" --zone="$zone" "$cluster"
     fi
 fi
 
-echo "Running: helm init --client-only"
-helm init --client-only
+# if HELM_VERSION starts with v2, initialize Helm
+if [[ $HELM_VERSION =~ ^v2 ]]; then
+  echo "Running: helm init --client-only"
+  helm init --client-only
+else
+  echo "Skipped 'helm init --client-only' because not v2"
+fi
 
 # if GCS_PLUGIN_VERSION is set, install the plugin
 if [[ -n $GCS_PLUGIN_VERSION ]]; then
@@ -41,38 +44,56 @@ if [[ -n $GCS_PLUGIN_VERSION ]]; then
   helm plugin install https://github.com/nouney/helm-gcs --version $GCS_PLUGIN_VERSION
 fi
 
+# if DIFF_PLUGIN_VERSION is set, install the plugin
+if [[ -n $DIFF_PLUGIN_VERSION ]]; then
+  echo "Installing helm DIFF plugin version $DIFF_PLUGIN_VERSION "
+  helm plugin install https://github.com/databus23/helm-diff --version $DIFF_PLUGIN_VERSION
+fi
+
+# if HELMFILE_VERSION is set, install Helmfile
+if [[ -n $HELMFILE_VERSION ]]; then
+  echo "Installing Helmfile version $HELMFILE_VERSION "
+  curl -SsL https://github.com/roboll/helmfile/releases/download/$HELMFILE_VERSION/helmfile_linux_amd64 > helmfile
+  chmod 700 helmfile
+fi
+
 # check if repo values provided then add that repo
 if [[ -n $HELM_REPO_NAME && -n $HELM_REPO_URL ]]; then
-  echo "Adding chart helm repo $HELM_REPO_URL "
+  echo "Adding chart helm repo $HELM_REPO_URL"
   helm repo add $HELM_REPO_NAME $HELM_REPO_URL
 fi
 
 echo "Running: helm repo update"
-helm repo update
+helm repo list && helm repo update || true
 
 
 # if 'TILLERLESS=true' is set, run a local tiller server with the secret backend
 # see also https://github.com/helm/helm/blob/master/docs/securing_installation.md#running-tiller-locally
 if [ "$TILLERLESS" = true ]; then
-  # create tiller-namespace if it doesn't exist (helm --init would usually do this with server-side tiller'
-  if [[ -n $TILLER_NAMESPACE ]]; then
-    echo "Creating tiller namespace $TILLER_NAMESPACE"
-    kubectl get namespace $TILLER_NAMESPACE || kubectl create namespace $TILLER_NAMESPACE
-  fi
+  if [[ $HELM_VERSION =~ ^v2 ]]; then
 
-  echo "Starting local tiller server"
-  #default inherits --listen localhost:44134 and TILLER_NAMESPACE
-  #use the secret driver by default
-  tiller --storage=secret &
-  export HELM_HOST=localhost:44134
-  if [ "$DEBUG" = true ]; then
-      echo "Running: helm $@"
+    # create tiller-namespace if it doesn't exist (helm --init would usually do this with server-side tiller'
+    if [[ -n $TILLER_NAMESPACE ]]; then
+      echo "Creating tiller namespace $TILLER_NAMESPACE"
+      kubectl get namespace $TILLER_NAMESPACE || kubectl create namespace $TILLER_NAMESPACE
+    fi
+
+    echo "Starting local tiller server"
+    #default inherits --listen localhost:44134 and TILLER_NAMESPACE
+    #use the secret driver by default
+    tiller --storage=secret &
+    export HELM_HOST=localhost:44134
+    if [ "$DEBUG" = true ]; then
+        echo "Running: helm $@"
+    fi
+    helm "$@" && exitCode=$? || exitCode=$?
+    echo "Stopping local tiller server"
+    pkill tiller
+    exit $exitCode
+  else
+    helm "$@" && exitCode=$? || exitCode=$?
+    exit $exitCode
   fi
-  helm "$@"
-  exitCode=$?
-  echo "Stopping local tiller server"
-  pkill tiller
-  exit $exitCode
 else
   if [ "$DEBUG" = true ]; then
       echo "Running: helm $@"
